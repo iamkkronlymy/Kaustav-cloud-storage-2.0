@@ -41,7 +41,6 @@
   <input type="file" id="fileInput" />
   <button onclick="upload()">Upload</button>
 
-  <!-- Progress Bar -->
   <div id="progressContainer">
     <div id="progressBar">0%</div>
   </div>
@@ -56,6 +55,12 @@
       const res = await fetch('/files?skip=' + skip);
       const files = await res.json();
       const container = document.getElementById('files');
+      
+      // Clear existing files if it's the first load, or just append
+      if (skip === 0) {
+        container.innerHTML = ''; 
+      }
+
       skip += files.length;
 
       files.forEach(file => {
@@ -81,8 +86,23 @@
 
     function toggleMenu(el) {
       const dropdown = el.nextElementSibling;
+      // Close all other dropdowns
+      document.querySelectorAll('.dropdown').forEach(d => {
+        if (d !== dropdown) {
+          d.style.display = 'none';
+        }
+      });
       dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
     }
+
+    // Close dropdown if clicked outside
+    window.onclick = function(event) {
+      if (!event.target.matches('.three-dot')) {
+        document.querySelectorAll('.dropdown').forEach(d => {
+          d.style.display = 'none';
+        });
+      }
+    };
 
     async function upload() {
       const input = document.getElementById('fileInput');
@@ -110,37 +130,57 @@
       xhr.onload = async function () {
         if (xhr.status === 200) {
           alert(xhr.responseText);
-          location.reload();
+          skip = 0; // Reset skip to load from beginning after upload
+          loadMore(); // Reload files
         } else {
-          alert('Upload failed');
+          alert('Upload failed: ' + xhr.responseText);
         }
+        progressContainer.style.display = 'none'; // Hide progress bar
+        input.value = ''; // Clear file input
       };
 
       xhr.onerror = function () {
         alert('Upload error');
+        progressContainer.style.display = 'none'; // Hide progress bar
+        input.value = ''; // Clear file input
       };
 
       xhr.send(form);
     }
 
     async function deleteFile(filename) {
-      await fetch('/delete/' + filename, { method: 'DELETE' });
-      alert('Deleted');
-      location.reload();
+      if (!confirm(`Are you sure you want to delete "${filename}"?`)) return;
+
+      const res = await fetch('/delete/' + filename, { method: 'DELETE' });
+      if (res.ok) {
+        alert('Deleted');
+        skip = 0; // Reset skip to load from beginning after delete
+        loadMore(); // Reload files
+      } else {
+        alert('Failed to delete: ' + await res.text());
+      }
     }
 
     function download(name) {
-      location.href = '/download/' + name;
+      window.open('/download/' + name, '_blank'); // Open in new tab for download
     }
 
     async function updateStats() {
-      const res = await fetch('/stats');
-      const data = await res.json();
-      document.getElementById('stats').innerText =
-        `Used: ${(data.used / 1024 / 1024).toFixed(2)} MB / 2048 MB — Free: ${(data.free / 1024 / 1024).toFixed(2)} MB`;
+      try {
+        const res = await fetch('/stats');
+        const data = await res.json();
+        document.getElementById('stats').innerText =
+          `Used: ${(data.used / 1024 / 1024).toFixed(2)} MB / 2048 MB — Free: ${(data.free / 1024 / 1024).toFixed(2)} MB`;
+      } catch (error) {
+        console.error("Error fetching stats:", error);
+        document.getElementById('stats').innerText = "Stats unavailable.";
+      }
     }
 
-    loadMore();
+    // Initial load when the page loads
+    document.addEventListener('DOMContentLoaded', () => {
+      loadMore();
+    });
   </script>
 </body>
 </html>
