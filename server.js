@@ -28,8 +28,6 @@ app.use(express.static('.'));
     for (let uri of dbUris) {
       console.log(`Attempting to connect to MongoDB: ${uri.substring(0, uri.indexOf('@') + 1)}...`);
       const client = new MongoClient(uri, {
-        // keepAlive is deprecated and true by default since MongoDB driver >= 4.0.0.
-        // Removed it to silence the deprecation warning.
         socketTimeoutMS: 360000,  // 6 minutes
         tls: true,
         // minVersion: 'TLS1.2' // Keeping this commented out. This allows the driver to negotiate
@@ -44,8 +42,9 @@ app.use(express.static('.'));
     }
     console.log("All MongoDB connections established.");
   } catch (error) {
-    console.error("CRITICAL ERROR: Failed to connect to one or more MongoDB clusters:", error);
+    console.error("CRITICAL ERROR: Failed to connect to one or more MongoDB clusters. Application will not start.");
     console.error("Please check your MongoDB URI, network access (IP whitelist on Atlas), and Node.js environment (especially TLS/OpenSSL compatibility).");
+    console.error("Error details:", error.message); // Log the error message
     // It's crucial to handle this error. If connections fail, the app can't function.
     process.exit(1); // Exit the process if initial DB connections fail
   }
@@ -107,7 +106,9 @@ app.post('/upload', upload.single('file'), async (req, res) => {
     return res.status(400).send('File already exists');
 
   if (buckets.length === 0) {
-    return res.status(503).send("Server is still initializing database connections or failed to connect. Please try again shortly.");
+    // This state indicates that the initial DB connections failed.
+    console.error("Upload attempted but no database connections are established.");
+    return res.status(503).send("Server is not ready: Database connections failed during startup. Please check server logs.");
   }
 
   for (let i = 0; i < buckets.length; i++) {
@@ -117,19 +118,21 @@ app.post('/upload', upload.single('file'), async (req, res) => {
         const stream = buckets[i].openUploadStream(req.file.originalname);
         stream.end(req.file.buffer);
         console.log(`File '${req.file.originalname}' uploaded to bucket ${i}.`);
-        return res.send('Uploaded');
+        return res.status(200).send('File uploaded successfully.'); // Explicit 200 OK
       }
     } catch (error) {
       console.error(`Error during upload of '${req.file.originalname}' to bucket ${i}: ${error.message}`);
       // Log the error but continue trying other buckets if possible.
+      // If this is a persistent DB error, the outer loop will exhaust buckets and return Storage Full or other relevant error.
     }
   }
-  res.status(507).send('Storage full');
+  // If loop finishes without returning, it means no space was found or all uploads failed.
+  res.status(507).send('Storage full or an error occurred during upload to all available buckets.');
 });
 
 app.delete('/delete/:filename', async (req, res) => {
   if (buckets.length === 0) {
-    return res.status(503).send("Server is still initializing database connections or failed to connect. Please try again shortly.");
+    return res.status(503).send("Server is still initializing database connections or failed to connect. Please check server logs.");
   }
   let deleted = false;
   for (let bucket of buckets) {
@@ -146,7 +149,7 @@ app.delete('/delete/:filename', async (req, res) => {
     }
   }
   if (deleted) {
-    res.send('Deleted');
+    res.status(200).send('File deleted successfully.'); // Explicit 200 OK
   } else {
     res.status(404).send('File not found or could not be deleted.');
   }
@@ -163,7 +166,8 @@ app.get('/stats', async (req, res) => {
       used += await getUsedBytes(b);
     } catch (error) {
       console.error(`Error getting stats from a bucket: ${error.message}`);
-      // Decide how to handle partial stats calculation if a bucket fails.
+      // If a bucket fails, it might mean partial stats. Decide how to handle this.
+      // For now, it will simply skip that bucket's contribution to `used`.
     }
   }
   res.json({ used, free: TOTAL_LIMIT - used });
