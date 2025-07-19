@@ -27,7 +27,7 @@ app.use(express.static('.'));
   for (let uri of dbUris) {
     const client = new MongoClient(uri, {
       keepAlive: true,
-      socketTimeoutMS: 360000,  // 6 minutes
+      socketTimeoutMS: 30000,  // 6 minutes
     });
     await client.connect();
     clients.push(client);
