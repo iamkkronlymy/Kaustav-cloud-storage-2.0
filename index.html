@@ -14,6 +14,24 @@
     .three-dot { cursor: pointer; }
     .file-meta { font-size: 0.9em; color: #666; }
     .stats { font-weight: bold; margin: 1em 0; }
+
+    /* Progress Bar */
+    #progressContainer {
+      margin-top: 10px;
+      background: #eee;
+      border-radius: 5px;
+      overflow: hidden;
+      display: none;
+    }
+    #progressBar {
+      height: 20px;
+      background-color: #4caf50;
+      width: 0%;
+      text-align: center;
+      color: white;
+      font-size: 14px;
+      line-height: 20px;
+    }
   </style>
 </head>
 <body>
@@ -22,6 +40,11 @@
 
   <input type="file" id="fileInput" />
   <button onclick="upload()">Upload</button>
+
+  <!-- Progress Bar -->
+  <div id="progressContainer">
+    <div id="progressBar">0%</div>
+  </div>
 
   <div id="files"></div>
   <button onclick="loadMore()">Load More</button>
@@ -66,9 +89,38 @@
       if (!input.files[0]) return alert('No file selected.');
       const form = new FormData();
       form.append('file', input.files[0]);
-      const res = await fetch('/upload', { method: 'POST', body: form });
-      alert(await res.text());
-      location.reload();
+
+      const progressContainer = document.getElementById('progressContainer');
+      const progressBar = document.getElementById('progressBar');
+      progressContainer.style.display = 'block';
+      progressBar.style.width = '0%';
+      progressBar.textContent = '0%';
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/upload');
+
+      xhr.upload.onprogress = function (event) {
+        if (event.lengthComputable) {
+          const percent = Math.round((event.loaded / event.total) * 100);
+          progressBar.style.width = percent + '%';
+          progressBar.textContent = percent + '%';
+        }
+      };
+
+      xhr.onload = async function () {
+        if (xhr.status === 200) {
+          alert(xhr.responseText);
+          location.reload();
+        } else {
+          alert('Upload failed');
+        }
+      };
+
+      xhr.onerror = function () {
+        alert('Upload error');
+      };
+
+      xhr.send(form);
     }
 
     async function deleteFile(filename) {
