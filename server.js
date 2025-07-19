@@ -39,13 +39,16 @@ app.use(express.static('.'));
       clients.push(client);
       buckets.push(new GridFSBucket(client.db('cloud'), { bucketName: 'files' }));
       console.log(`Successfully connected to MongoDB: ${uri.substring(0, uri.indexOf('@') + 1)}...`);
+      
+      // 3ms delay between connection attempts
+      await new Promise(resolve => setTimeout(resolve, 3)); 
+
     }
     console.log("All MongoDB connections established.");
   } catch (error) {
     console.error("CRITICAL ERROR: Failed to connect to one or more MongoDB clusters. Application will not start.");
     console.error("Please check your MongoDB URI, network access (IP whitelist on Atlas), and Node.js environment (especially TLS/OpenSSL compatibility).");
-    console.error("Error details:", error.message); // Log the error message
-    // It's crucial to handle this error. If connections fail, the app can't function.
+    console.error("Error details:", error.message);
     process.exit(1); // Exit the process if initial DB connections fail
   }
 })();
