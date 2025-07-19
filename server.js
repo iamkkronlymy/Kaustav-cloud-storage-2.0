@@ -1,6 +1,5 @@
 const express = require('express');
 const multer = require('multer');
-const basicAuth = require('express-basic-auth');
 const fs = require('fs');
 const { MongoClient, GridFSBucket } = require('mongodb');
 const path = require('path');
@@ -9,7 +8,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const upload = multer({ limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB per file
-const MAX_DB_STORAGE = 512 * 1024 * 1024; // 512MB per database
+const MAX_DB_STORAGE = 512 * 1024 * 1024; // 512MB per DB
 const TOTAL_LIMIT = 2 * 1024 * 1024 * 1024; // 2GB total
 
 const dbUris = [
@@ -21,16 +20,11 @@ const dbUris = [
 
 let clients = [], buckets = [];
 
-app.use(basicAuth({
-  users: { 'Kaustav': 'Kaustav' },
-  challenge: true
-}));
-
 app.use(express.static('.'));
 
-// Initialize all MongoDB buckets
+// Initialize MongoDB clients and GridFS buckets
 (async () => {
-  for (const uri of dbUris) {
+  for (let uri of dbUris) {
     const client = new MongoClient(uri);
     await client.connect();
     clients.push(client);
@@ -44,9 +38,9 @@ async function getUsedBytes(bucket) {
 }
 
 async function findFileAllBuckets(filename) {
-  for (const bucket of buckets) {
-    const files = await bucket.find({ filename }).toArray();
-    if (files.length) return { file: files[0], bucket };
+  for (let i = 0; i < buckets.length; i++) {
+    const files = await buckets[i].find({ filename }).toArray();
+    if (files.length) return { file: files[0], bucket: buckets[i] };
   }
   return null;
 }
@@ -54,7 +48,7 @@ async function findFileAllBuckets(filename) {
 app.get('/files', async (req, res) => {
   const skip = parseInt(req.query.skip) || 0;
   let allFiles = [];
-  for (const bucket of buckets) {
+  for (let bucket of buckets) {
     const files = await bucket.find().toArray();
     allFiles.push(...files);
   }
@@ -87,9 +81,9 @@ app.post('/upload', upload.single('file'), async (req, res) => {
 });
 
 app.delete('/delete/:filename', async (req, res) => {
-  for (const bucket of buckets) {
+  for (let bucket of buckets) {
     const files = await bucket.find({ filename: req.params.filename }).toArray();
-    for (const file of files) {
+    for (let file of files) {
       await bucket.delete(file._id);
     }
   }
@@ -98,9 +92,7 @@ app.delete('/delete/:filename', async (req, res) => {
 
 app.get('/stats', async (req, res) => {
   let used = 0;
-  for (const bucket of buckets) {
-    used += await getUsedBytes(bucket);
-  }
+  for (let b of buckets) used += await getUsedBytes(b);
   res.json({ used, free: TOTAL_LIMIT - used });
 });
 
