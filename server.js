@@ -18,7 +18,8 @@ const dbUris = [
   'mongodb+srv://csq5tft8:gEdmhQ94kIgcGi28@cluster0.52zk8gi.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
   'mongodb+srv://aohtvv0:bQuM9iRZm91GrPKe@cluster0.qvwhl5x.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
   'mongodb+srv://hb6g6vff6gf:Gyjp3wBB8FGyqpXz@cluster0.jkbqe5x.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
-  'mongodb+srv://aq9d7qh:fKjI8toWE6kVixkL@cluster0.umimpv3.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0'
+  'mongodb+srv://aq9d7qh:fKjI8toWE6kVixkL@cluster0.umimpv3.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
+  'mongodb+srv://tgonjm3m:ExkshiAvko74PU35@cluster0.eg776s0.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0'
 ];
 
 let clients = [], buckets = [];
