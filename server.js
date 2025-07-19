@@ -24,8 +24,9 @@ app.use(express.static('.'));
 
 // Initialize MongoDB clients and GridFS buckets with TLS options
 (async () => {
-  try {
-    for (let uri of dbUris) {
+  let successfulConnections = 0;
+  for (let uri of dbUris) {
+    try {
       console.log(`Attempting to connect to MongoDB: ${uri.substring(0, uri.indexOf('@') + 1)}...`);
       const client = new MongoClient(uri, {
         socketTimeoutMS: 360000,  // 6 minutes
@@ -39,17 +40,23 @@ app.use(express.static('.'));
       clients.push(client);
       buckets.push(new GridFSBucket(client.db('cloud'), { bucketName: 'files' }));
       console.log(`Successfully connected to MongoDB: ${uri.substring(0, uri.indexOf('@') + 1)}...`);
-      
-      // 3ms delay between connection attempts
-      await new Promise(resolve => setTimeout(resolve, 3)); 
-
+      successfulConnections++;
+    } catch (error) {
+      console.error(`ERROR: Failed to connect to MongoDB URI ${uri.substring(0, uri.indexOf('@') + 1)}...`);
+      console.error("Please check your MongoDB URI, network access (IP whitelist on Atlas), and Node.js environment (especially TLS/OpenSSL compatibility).");
+      console.error("Error details:", error.message);
+      // Continue to the next URI even if this one fails
     }
-    console.log("All MongoDB connections established.");
-  } catch (error) {
-    console.error("CRITICAL ERROR: Failed to connect to one or more MongoDB clusters. Application will not start.");
-    console.error("Please check your MongoDB URI, network access (IP whitelist on Atlas), and Node.js environment (especially TLS/OpenSSL compatibility).");
-    console.error("Error details:", error.message);
-    process.exit(1); // Exit the process if initial DB connections fail
+    // 3ms delay between connection attempts
+    await new Promise(resolve => setTimeout(resolve, 3));
+  }
+
+  if (successfulConnections === 0) {
+    console.error("CRITICAL ERROR: Failed to connect to ANY MongoDB clusters. Application will not start.");
+    process.exit(1); // Exit if no connections could be established
+  } else {
+    console.log(`Successfully established connections to ${successfulConnections} out of ${dbUris.length} MongoDB clusters.`);
+    console.log("Application will proceed with available connections.");
   }
 })();
 
