@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Kaustav Cloud</title>
+  <style>
+    body { font-family: sans-serif; max-width: 700px; margin: auto; padding: 1em; }
+    h2 { text-align: center; }
+    .file-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #ccc; }
+    .dropdown { display: none; position: absolute; right: 10px; background: #fff; border: 1px solid #ccc; z-index: 100; }
+    .dropdown button { display: block; width: 100%; padding: 5px 10px; border: none; background: #fff; cursor: pointer; }
+    .dropdown button:hover { background: #f0f0f0; }
+    .three-dot { cursor: pointer; }
+    .file-meta { font-size: 0.9em; color: #666; }
+    .stats { font-weight: bold; margin: 1em 0; }
+  </style>
+</head>
+<body>
+  <h2>Kaustav Cloud</h2>
+  <div class="stats" id="stats">Loading...</div>
+
+  <input type="file" id="fileInput" />
+  <button onclick="upload()">Upload</button>
+
+  <div id="files"></div>
+  <button onclick="loadMore()">Load More</button>
+
+  <script>
+    let skip = 0;
+
+    async function loadMore() {
+      const res = await fetch('/files?skip=' + skip);
+      const files = await res.json();
+      const container = document.getElementById('files');
+      skip += files.length;
+
+      files.forEach(file => {
+        const item = document.createElement('div');
+        item.className = 'file-item';
+        item.innerHTML = `
+          <div>
+            <strong>${file.filename}</strong><br/>
+            <span class="file-meta">${new Date(file.uploadDate).toLocaleString()}</span>
+          </div>
+          <div style="position: relative;">
+            <span class="three-dot" onclick="toggleMenu(this)">⋮</span>
+            <div class="dropdown">
+              <button onclick="download('${file.filename}')">Download</button>
+              <button onclick="deleteFile('${file.filename}')">Delete</button>
+            </div>
+          </div>`;
+        container.appendChild(item);
+      });
+
+      updateStats();
+    }
+
+    function toggleMenu(el) {
+      const dropdown = el.nextElementSibling;
+      dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+    }
+
+    async function upload() {
+      const input = document.getElementById('fileInput');
+      if (!input.files[0]) return alert('No file selected.');
+      const form = new FormData();
+      form.append('file', input.files[0]);
+      const res = await fetch('/upload', { method: 'POST', body: form });
+      alert(await res.text());
+      location.reload();
+    }
+
+    async function deleteFile(filename) {
+      await fetch('/delete/' + filename, { method: 'DELETE' });
+      alert('Deleted');
+      location.reload();
+    }
+
+    function download(name) {
+      location.href = '/download/' + name;
+    }
+
+    async function updateStats() {
+      const res = await fetch('/stats');
+      const data = await res.json();
+      document.getElementById('stats').innerText =
+        `Used: ${(data.used / 1024 / 1024).toFixed(2)} MB / 2048 MB — Free: ${(data.free / 1024 / 1024).toFixed(2)} MB`;
+    }
+
+    loadMore();
+  </script>
+</body>
+</html>
