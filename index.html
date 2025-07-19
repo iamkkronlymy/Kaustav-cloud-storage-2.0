@@ -75,18 +75,16 @@
         const files = await res.json();
         const container = document.getElementById('files');
         
-        // Clear existing files if it's the first load, or just append
-        if (skip === 0) {
-          container.innerHTML = ''; 
+        if (skip === 0) { // If it's the first load or a refresh
+          container.innerHTML = ''; // Clear existing files
         }
 
         // Only increase skip if files were actually loaded
         if (files.length > 0) {
             skip += files.length;
-        } else {
-            // If no new files, and it's not the first load, maybe no more files.
-            // You could disable the "Load More" button here.
-        }
+        } 
+        // Note: If files.length is 0, skip remains the same, implying no more files to load.
+        // You might want to disable the "Load More" button if files.length is 0 and skip > 0.
 
         files.forEach(file => {
           const item = document.createElement('div');
@@ -109,15 +107,13 @@
         updateStats();
       } catch (error) {
         console.error("Error loading files:", error);
-        // Display user-friendly error message on the page
         const container = document.getElementById('files');
-        container.innerHTML = `<p style="color: red;">Error loading files: ${error.message}</p>`;
+        container.innerHTML = `<p style="color: red;">Error loading files: ${error.message}. Check server logs.</p>`;
       }
     }
 
     function toggleMenu(el) {
       const dropdown = el.nextElementSibling;
-      // Close all other dropdowns
       document.querySelectorAll('.dropdown').forEach(d => {
         if (d !== dropdown) {
           d.style.display = 'none';
@@ -126,7 +122,6 @@
       dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
     }
 
-    // Close dropdown if clicked outside
     window.onclick = function(event) {
       if (!event.target.matches('.three-dot')) {
         document.querySelectorAll('.dropdown').forEach(d => {
@@ -171,19 +166,24 @@
       };
 
       xhr.onload = async function () {
+        // Crucial change: Display the actual response from the server for debugging
+        const serverResponse = xhr.responseText;
         if (xhr.status === 200) {
-          alert('Upload successful: ' + xhr.responseText);
+          alert('Upload successful: ' + serverResponse);
           skip = 0; // Reset skip to load from beginning after upload
           loadMore(); // Reload files
         } else {
-          alert('Upload failed: ' + xhr.responseText);
+          // Log the full server response to the console for detailed debugging
+          console.error("Upload failed. Server response:", serverResponse);
+          alert('Upload failed: ' + serverResponse);
         }
         progressContainer.style.display = 'none'; // Hide progress bar
         input.value = ''; // Clear file input
       };
 
       xhr.onerror = function () {
-        alert('Upload error. Check server logs.');
+        console.error("XHR error during upload. Network issue or server unreachable.");
+        alert('Upload error. Please check your network connection and server status. Also check browser console.');
         progressContainer.style.display = 'none'; // Hide progress bar
         input.value = ''; // Clear file input
       };
@@ -196,24 +196,25 @@
 
       try {
         const res = await fetch('/delete/' + filename, { method: 'DELETE' });
+        const serverResponse = await res.text();
         if (res.ok) {
-          alert('Deleted successfully.');
+          alert('Deleted successfully: ' + serverResponse);
           skip = 0; // Reset skip to load from beginning after delete
           loadMore(); // Reload files
         } else {
-          alert('Failed to delete: ' + await res.text());
+          console.error("Delete failed. Server response:", serverResponse);
+          alert('Failed to delete: ' + serverResponse);
         }
       } catch (error) {
         console.error("Error during delete operation:", error);
-        alert("An error occurred during deletion. Check console for details.");
+        alert("An error occurred during deletion. Check browser console for details.");
       }
     }
 
     function download(name) {
-      // Create a temporary anchor tag to initiate download
       const link = document.createElement('a');
       link.href = '/download/' + name;
-      link.download = name; // Suggest filename for download
+      link.download = name; 
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -228,13 +229,16 @@
         const data = await res.json();
         document.getElementById('stats').innerText =
           `Used: ${(data.used / 1024 / 1024).toFixed(2)} MB / 2048 MB — Free: ${(data.free / 1024 / 1024).toFixed(2)} MB`;
+          
+        if (data.message) { // Display message if provided by server (e.g., DB not ready)
+            document.getElementById('stats').innerText += ` (${data.message})`;
+        }
       } catch (error) {
         console.error("Error fetching stats:", error);
-        document.getElementById('stats').innerText = "Stats unavailable.";
+        document.getElementById('stats').innerText = "Stats unavailable. Check server logs.";
       }
     }
 
-    // Initial load when the page loads
     document.addEventListener('DOMContentLoaded', () => {
       loadMore();
     });
