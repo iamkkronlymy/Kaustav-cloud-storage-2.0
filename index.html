@@ -7,17 +7,36 @@
   <style>
     body { font-family: sans-serif; max-width: 700px; margin: auto; padding: 1em; }
     h2 { text-align: center; }
-    .file-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #ccc; }
+    /* Updated file-item to use flexbox for better alignment of image + text */
+    .file-item { 
+        display: flex; 
+        align-items: center; /* Vertically align items */
+        justify-content: space-between; 
+        padding: 10px 0; 
+        border-bottom: 1px solid #ccc; 
+    }
+    .file-info {
+        display: flex; /* Flex container for filename and image */
+        align-items: center; /* Align image and text vertically */
+        gap: 10px; /* Space between image and text */
+    }
+    .file-preview {
+        width: 50px; /* Small preview size */
+        height: 50px;
+        object-fit: contain; /* Ensure image fits within bounds without cropping */
+        border-radius: 4px;
+        border: 1px solid #eee;
+    }
     .dropdown { display: none; position: absolute; right: 10px; background: #fff; border: 1px solid #ccc; z-index: 100; box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2); }
     .dropdown button { display: block; width: 100%; padding: 8px 15px; border: none; background: #fff; cursor: pointer; text-align: left; }
     .dropdown button:hover { background: #f0f0f0; }
-    .three-dot { cursor: pointer; font-size: 1.2em; padding: 0 5px; } /* Increased size for easier click */
+    .three-dot { cursor: pointer; font-size: 1.2em; padding: 0 5px; }
     .file-meta { font-size: 0.9em; color: #666; }
     .stats { font-weight: bold; margin: 1em 0; padding: 5px; border: 1px solid #eee; background-color: #f9f9f9;}
 
     /* Progress Bar */
     #progressContainer {
-      margin-top: 15px; /* Increased margin for better spacing */
+      margin-top: 15px;
       background: #eee;
       border-radius: 5px;
       overflow: hidden;
@@ -25,14 +44,14 @@
       box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
     }
     #progressBar {
-      height: 25px; /* Slightly taller */
+      height: 25px;
       background-color: #4caf50;
       width: 0%;
       text-align: center;
       color: white;
       font-size: 14px;
-      line-height: 25px; /* Aligned with height */
-      transition: width 0.3s ease-in-out; /* Smooth transition */
+      line-height: 25px;
+      transition: width 0.3s ease-in-out;
     }
     input[type="file"] {
       margin-right: 10px;
@@ -66,6 +85,13 @@
   <script>
     let skip = 0;
 
+    // Helper function to check if a filename corresponds to an image
+    function isImageFile(filename) {
+        const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'];
+        const ext = filename.split('.').pop().toLowerCase();
+        return imageExtensions.includes('.' + ext);
+    }
+
     async function loadMore() {
       try {
         const res = await fetch('/files?skip=' + skip);
@@ -75,24 +101,32 @@
         const files = await res.json();
         const container = document.getElementById('files');
         
-        if (skip === 0) { // If it's the first load or a refresh
-          container.innerHTML = ''; // Clear existing files
+        if (skip === 0) {
+          container.innerHTML = '';
         }
 
-        // Only increase skip if files were actually loaded
         if (files.length > 0) {
             skip += files.length;
         } 
-        // Note: If files.length is 0, skip remains the same, implying no more files to load.
-        // You might want to disable the "Load More" button here.
-
+        
         files.forEach(file => {
           const item = document.createElement('div');
           item.className = 'file-item';
+
+          let previewHtml = '';
+          if (isImageFile(file.filename)) {
+              // Note: The /download endpoint works for display because browsers interpret
+              // Content-Type correctly for images.
+              previewHtml = `<img src="/download/${encodeURIComponent(file.filename)}" alt="Preview" class="file-preview">`;
+          }
+
           item.innerHTML = `
-            <div>
-              <strong>${file.filename}</strong><br/>
-              <span class="file-meta">${new Date(file.uploadDate).toLocaleString()}</span>
+            <div class="file-info">
+              ${previewHtml}
+              <div>
+                <strong>${file.filename}</strong><br/>
+                <span class="file-meta">${new Date(file.uploadDate).toLocaleString()}</span>
+              </div>
             </div>
             <div style="position: relative;">
               <span class="three-dot" onclick="toggleMenu(this)">⋮</span>
@@ -210,7 +244,6 @@
       }
     }
 
-    // New function for renaming files
     async function renameFile(oldName) {
         const newName = prompt(`Enter new name for "${oldName}":`);
         if (!newName || newName.trim() === '') {
