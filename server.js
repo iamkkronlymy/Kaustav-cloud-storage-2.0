@@ -29,7 +29,7 @@ app.use(express.static('.'));
       keepAlive: true,
       socketTimeoutMS: 360000,  // 6 minutes
       tls: true,
-      minVersion: 'TLS1.2'
+      tlsMinVersion: 'TLS1.2' // CORRECTED OPTION
       // tlsAllowInvalidCertificates: false, // Uncomment if needed
     });
     await client.connect();
