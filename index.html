@@ -8,29 +8,44 @@
     body { font-family: sans-serif; max-width: 700px; margin: auto; padding: 1em; }
     h2 { text-align: center; }
     .file-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #ccc; }
-    .dropdown { display: none; position: absolute; right: 10px; background: #fff; border: 1px solid #ccc; z-index: 100; }
-    .dropdown button { display: block; width: 100%; padding: 5px 10px; border: none; background: #fff; cursor: pointer; }
+    .dropdown { display: none; position: absolute; right: 10px; background: #fff; border: 1px solid #ccc; z-index: 100; box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2); }
+    .dropdown button { display: block; width: 100%; padding: 8px 15px; border: none; background: #fff; cursor: pointer; text-align: left; }
     .dropdown button:hover { background: #f0f0f0; }
-    .three-dot { cursor: pointer; }
+    .three-dot { cursor: pointer; font-size: 1.2em; padding: 0 5px; } /* Increased size for easier click */
     .file-meta { font-size: 0.9em; color: #666; }
-    .stats { font-weight: bold; margin: 1em 0; }
+    .stats { font-weight: bold; margin: 1em 0; padding: 5px; border: 1px solid #eee; background-color: #f9f9f9;}
 
     /* Progress Bar */
     #progressContainer {
-      margin-top: 10px;
+      margin-top: 15px; /* Increased margin for better spacing */
       background: #eee;
       border-radius: 5px;
       overflow: hidden;
       display: none;
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
     }
     #progressBar {
-      height: 20px;
+      height: 25px; /* Slightly taller */
       background-color: #4caf50;
       width: 0%;
       text-align: center;
       color: white;
       font-size: 14px;
-      line-height: 20px;
+      line-height: 25px; /* Aligned with height */
+      transition: width 0.3s ease-in-out; /* Smooth transition */
+    }
+    input[type="file"] {
+      margin-right: 10px;
+    }
+    button {
+      padding: 8px 15px;
+      cursor: pointer;
+      border: 1px solid #ccc;
+      background-color: #f0f0f0;
+      border-radius: 5px;
+    }
+    button:hover {
+      background-color: #e0e0e0;
     }
   </style>
 </head>
@@ -52,36 +67,52 @@
     let skip = 0;
 
     async function loadMore() {
-      const res = await fetch('/files?skip=' + skip);
-      const files = await res.json();
-      const container = document.getElementById('files');
-      
-      // Clear existing files if it's the first load, or just append
-      if (skip === 0) {
-        container.innerHTML = ''; 
-      }
+      try {
+        const res = await fetch('/files?skip=' + skip);
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status} - ${await res.text()}`);
+        }
+        const files = await res.json();
+        const container = document.getElementById('files');
+        
+        // Clear existing files if it's the first load, or just append
+        if (skip === 0) {
+          container.innerHTML = ''; 
+        }
 
-      skip += files.length;
+        // Only increase skip if files were actually loaded
+        if (files.length > 0) {
+            skip += files.length;
+        } else {
+            // If no new files, and it's not the first load, maybe no more files.
+            // You could disable the "Load More" button here.
+        }
 
-      files.forEach(file => {
-        const item = document.createElement('div');
-        item.className = 'file-item';
-        item.innerHTML = `
-          <div>
-            <strong>${file.filename}</strong><br/>
-            <span class="file-meta">${new Date(file.uploadDate).toLocaleString()}</span>
-          </div>
-          <div style="position: relative;">
-            <span class="three-dot" onclick="toggleMenu(this)">⋮</span>
-            <div class="dropdown">
-              <button onclick="download('${file.filename}')">Download</button>
-              <button onclick="deleteFile('${file.filename}')">Delete</button>
+        files.forEach(file => {
+          const item = document.createElement('div');
+          item.className = 'file-item';
+          item.innerHTML = `
+            <div>
+              <strong>${file.filename}</strong><br/>
+              <span class="file-meta">${new Date(file.uploadDate).toLocaleString()}</span>
             </div>
-          </div>`;
-        container.appendChild(item);
-      });
+            <div style="position: relative;">
+              <span class="three-dot" onclick="toggleMenu(this)">⋮</span>
+              <div class="dropdown">
+                <button onclick="download('${file.filename}')">Download</button>
+                <button onclick="deleteFile('${file.filename}')">Delete</button>
+              </div>
+            </div>`;
+          container.appendChild(item);
+        });
 
-      updateStats();
+        updateStats();
+      } catch (error) {
+        console.error("Error loading files:", error);
+        // Display user-friendly error message on the page
+        const container = document.getElementById('files');
+        container.innerHTML = `<p style="color: red;">Error loading files: ${error.message}</p>`;
+      }
     }
 
     function toggleMenu(el) {
@@ -106,9 +137,21 @@
 
     async function upload() {
       const input = document.getElementById('fileInput');
-      if (!input.files[0]) return alert('No file selected.');
+      if (!input.files[0]) {
+        alert('No file selected.');
+        return;
+      }
+      
+      const file = input.files[0];
+      const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB, matches server limit
+      if (file.size > MAX_FILE_SIZE) {
+        alert(`File size exceeds the limit of ${MAX_FILE_SIZE / (1024 * 1024)} MB.`);
+        input.value = ''; // Clear file input
+        return;
+      }
+
       const form = new FormData();
-      form.append('file', input.files[0]);
+      form.append('file', file);
 
       const progressContainer = document.getElementById('progressContainer');
       const progressBar = document.getElementById('progressBar');
@@ -129,7 +172,7 @@
 
       xhr.onload = async function () {
         if (xhr.status === 200) {
-          alert(xhr.responseText);
+          alert('Upload successful: ' + xhr.responseText);
           skip = 0; // Reset skip to load from beginning after upload
           loadMore(); // Reload files
         } else {
@@ -140,7 +183,7 @@
       };
 
       xhr.onerror = function () {
-        alert('Upload error');
+        alert('Upload error. Check server logs.');
         progressContainer.style.display = 'none'; // Hide progress bar
         input.value = ''; // Clear file input
       };
@@ -151,23 +194,37 @@
     async function deleteFile(filename) {
       if (!confirm(`Are you sure you want to delete "${filename}"?`)) return;
 
-      const res = await fetch('/delete/' + filename, { method: 'DELETE' });
-      if (res.ok) {
-        alert('Deleted');
-        skip = 0; // Reset skip to load from beginning after delete
-        loadMore(); // Reload files
-      } else {
-        alert('Failed to delete: ' + await res.text());
+      try {
+        const res = await fetch('/delete/' + filename, { method: 'DELETE' });
+        if (res.ok) {
+          alert('Deleted successfully.');
+          skip = 0; // Reset skip to load from beginning after delete
+          loadMore(); // Reload files
+        } else {
+          alert('Failed to delete: ' + await res.text());
+        }
+      } catch (error) {
+        console.error("Error during delete operation:", error);
+        alert("An error occurred during deletion. Check console for details.");
       }
     }
 
     function download(name) {
-      window.open('/download/' + name, '_blank'); // Open in new tab for download
+      // Create a temporary anchor tag to initiate download
+      const link = document.createElement('a');
+      link.href = '/download/' + name;
+      link.download = name; // Suggest filename for download
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
 
     async function updateStats() {
       try {
         const res = await fetch('/stats');
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status} - ${await res.text()}`);
+        }
         const data = await res.json();
         document.getElementById('stats').innerText =
           `Used: ${(data.used / 1024 / 1024).toFixed(2)} MB / 2048 MB — Free: ${(data.free / 1024 / 1024).toFixed(2)} MB`;
