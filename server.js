@@ -8,8 +8,8 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const upload = multer({ limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB max
-const MAX_DB_STORAGE = 512 * 1024 * 1024; // 512MB per DB
+const upload = multer({ limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB per file
+const MAX_DB_STORAGE = 512 * 1024 * 1024; // 512MB per database
 const TOTAL_LIMIT = 2 * 1024 * 1024 * 1024; // 2GB total
 
 const dbUris = [
@@ -28,9 +28,9 @@ app.use(basicAuth({
 
 app.use(express.static('.'));
 
-// Initialize MongoDB clients and GridFS buckets
+// Initialize all MongoDB buckets
 (async () => {
-  for (let uri of dbUris) {
+  for (const uri of dbUris) {
     const client = new MongoClient(uri);
     await client.connect();
     clients.push(client);
@@ -44,9 +44,9 @@ async function getUsedBytes(bucket) {
 }
 
 async function findFileAllBuckets(filename) {
-  for (let i = 0; i < buckets.length; i++) {
-    const files = await buckets[i].find({ filename }).toArray();
-    if (files.length) return { file: files[0], bucket: buckets[i] };
+  for (const bucket of buckets) {
+    const files = await bucket.find({ filename }).toArray();
+    if (files.length) return { file: files[0], bucket };
   }
   return null;
 }
@@ -54,7 +54,7 @@ async function findFileAllBuckets(filename) {
 app.get('/files', async (req, res) => {
   const skip = parseInt(req.query.skip) || 0;
   let allFiles = [];
-  for (let bucket of buckets) {
+  for (const bucket of buckets) {
     const files = await bucket.find().toArray();
     allFiles.push(...files);
   }
@@ -87,9 +87,9 @@ app.post('/upload', upload.single('file'), async (req, res) => {
 });
 
 app.delete('/delete/:filename', async (req, res) => {
-  for (let bucket of buckets) {
+  for (const bucket of buckets) {
     const files = await bucket.find({ filename: req.params.filename }).toArray();
-    for (let file of files) {
+    for (const file of files) {
       await bucket.delete(file._id);
     }
   }
@@ -98,7 +98,9 @@ app.delete('/delete/:filename', async (req, res) => {
 
 app.get('/stats', async (req, res) => {
   let used = 0;
-  for (let b of buckets) used += await getUsedBytes(b);
+  for (const bucket of buckets) {
+    used += await getUsedBytes(bucket);
+  }
   res.json({ used, free: TOTAL_LIMIT - used });
 });
 
