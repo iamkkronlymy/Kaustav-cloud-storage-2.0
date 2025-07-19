@@ -1,11 +1,14 @@
 const express = require('express');
 const multer = require('multer');
 const fs = require('fs');
-const { MongoClient, GridFSBucket } = require('mongodb');
+const { MongoClient, GridFSBucket, ObjectId } = require('mongodb'); // Import ObjectId
 const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Add express.json() middleware to parse JSON request bodies
+app.use(express.json());
 
 const upload = multer({ limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB per file
 const MAX_DB_STORAGE = 512 * 1024 * 1024; // 512MB per DB
@@ -45,7 +48,6 @@ app.use(express.static('.'));
       console.error(`ERROR: Failed to connect to MongoDB URI ${uri.substring(0, uri.indexOf('@') + 1)}...`);
       console.error("Please check your MongoDB URI, network access (IP whitelist on Atlas), and Node.js environment (especially TLS/OpenSSL compatibility).");
       console.error("Error details:", error.message);
-      // Continue to the next URI even if this one fails
     }
     // 3ms delay between connection attempts
     await new Promise(resolve => setTimeout(resolve, 3));
@@ -68,11 +70,11 @@ async function getUsedBytes(bucket) {
 async function findFileAllBuckets(filename) {
   for (let i = 0; i < buckets.length; i++) {
     try {
+      // Find the file by filename
       const files = await buckets[i].find({ filename }).toArray();
-      if (files.length) return { file: files[0], bucket: buckets[i] };
+      if (files.length) return { file: files[0], bucket: buckets[i], bucketIndex: i }; // Return bucketIndex
     } catch (error) {
       console.error(`Error searching for file '${filename}' in bucket ${i}: ${error.message}`);
-      // Continue to next bucket if there's an issue with one
     }
   }
   return null;
@@ -90,7 +92,6 @@ app.get('/files', async (req, res) => {
       allFiles.push(...files);
     } catch (error) {
       console.error(`Error fetching files from a bucket during /files request: ${error.message}`);
-      // Decide if you want to partially succeed or fail the request if one bucket has an issue
     }
   }
   allFiles.sort((a, b) => b.uploadDate - a.uploadDate);
@@ -116,7 +117,6 @@ app.post('/upload', upload.single('file'), async (req, res) => {
     return res.status(400).send('File already exists');
 
   if (buckets.length === 0) {
-    // This state indicates that the initial DB connections failed.
     console.error("Upload attempted but no database connections are established.");
     return res.status(503).send("Server is not ready: Database connections failed during startup. Please check server logs.");
   }
@@ -128,17 +128,56 @@ app.post('/upload', upload.single('file'), async (req, res) => {
         const stream = buckets[i].openUploadStream(req.file.originalname);
         stream.end(req.file.buffer);
         console.log(`File '${req.file.originalname}' uploaded to bucket ${i}.`);
-        return res.status(200).send('File uploaded successfully.'); // Explicit 200 OK
+        return res.status(200).send('File uploaded successfully.');
       }
     } catch (error) {
       console.error(`Error during upload of '${req.file.originalname}' to bucket ${i}: ${error.message}`);
-      // Log the error but continue trying other buckets if possible.
-      // If this is a persistent DB error, the outer loop will exhaust buckets and return Storage Full or other relevant error.
     }
   }
-  // If loop finishes without returning, it means no space was found or all uploads failed.
   res.status(507).send('Storage full or an error occurred during upload to all available buckets.');
 });
+
+// New endpoint for renaming files
+app.post('/rename', async (req, res) => {
+  const { oldName, newName } = req.body;
+
+  if (!oldName || !newName) {
+    return res.status(400).send('Old name and new name are required.');
+  }
+
+  if (oldName === newName) {
+    return res.status(400).send('New name cannot be the same as the old name.');
+  }
+
+  if (buckets.length === 0) {
+    return res.status(503).send("Server is not ready: Database connections not established.");
+  }
+
+  // Check if a file with the new name already exists
+  if (await findFileAllBuckets(newName)) {
+    return res.status(409).send(`A file named '${newName}' already exists.`);
+  }
+
+  const match = await findFileAllBuckets(oldName);
+  if (!match) {
+    return res.status(404).send('Original file not found.');
+  }
+
+  try {
+    // GridFS does not have a direct rename operation on the file document.
+    // Instead, you update the filename field in the files collection directly.
+    await match.bucket.s.db.collection('files.files').updateOne(
+      { _id: match.file._id },
+      { $set: { filename: newName } }
+    );
+    console.log(`File '${oldName}' renamed to '${newName}' in bucket ${match.bucketIndex}.`);
+    res.status(200).send('File renamed successfully.');
+  } catch (error) {
+    console.error(`Error renaming file '${oldName}' to '${newName}': ${error.message}`);
+    res.status(500).send('Error renaming file: ' + error.message);
+  }
+});
+
 
 app.delete('/delete/:filename', async (req, res) => {
   if (buckets.length === 0) {
@@ -150,16 +189,15 @@ app.delete('/delete/:filename', async (req, res) => {
       const files = await bucket.find({ filename: req.params.filename }).toArray();
       for (let file of files) {
         await bucket.delete(file._id);
-        deleted = true; // Mark as deleted if found and deleted from any bucket
+        deleted = true;
         console.log(`File '${req.params.filename}' deleted from a bucket.`);
       }
     } catch (error) {
       console.error(`Error deleting file '${req.params.filename}' from a bucket: ${error.message}`);
-      // Continue to next bucket if deletion from one fails.
     }
   }
   if (deleted) {
-    res.status(200).send('File deleted successfully.'); // Explicit 200 OK
+    res.status(200).send('File deleted successfully.');
   } else {
     res.status(404).send('File not found or could not be deleted.');
   }
@@ -168,7 +206,6 @@ app.delete('/delete/:filename', async (req, res) => {
 app.get('/stats', async (req, res) => {
   let used = 0;
   if (buckets.length === 0) {
-    // Return a default state if DBs are not ready, with a message for clarity.
     return res.json({ used: 0, free: TOTAL_LIMIT, message: "Database connections not yet established." });
   }
   for (let b of buckets) {
@@ -176,8 +213,6 @@ app.get('/stats', async (req, res) => {
       used += await getUsedBytes(b);
     } catch (error) {
       console.error(`Error getting stats from a bucket: ${error.message}`);
-      // If a bucket fails, it might mean partial stats. Decide how to handle this.
-      // For now, it will simply skip that bucket's contribution to `used`.
     }
   }
   res.json({ used, free: TOTAL_LIMIT - used });
