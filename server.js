@@ -22,12 +22,15 @@ let clients = [], buckets = [];
 
 app.use(express.static('.'));
 
-// Initialize MongoDB clients and GridFS buckets with keep-alive options
+// Initialize MongoDB clients and GridFS buckets with keep-alive and TLS options
 (async () => {
   for (let uri of dbUris) {
     const client = new MongoClient(uri, {
       keepAlive: true,
-      socketTimeoutMS: 30000,  // 6 minutes
+      socketTimeoutMS: 360000,  // 6 minutes
+      tls: true,
+      minVersion: 'TLS1.2'
+      // tlsAllowInvalidCertificates: false, // Uncomment if needed
     });
     await client.connect();
     clients.push(client);
