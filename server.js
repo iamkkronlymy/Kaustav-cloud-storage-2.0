@@ -28,9 +28,8 @@ app.use(express.static('.'));
     const client = new MongoClient(uri, {
       keepAlive: true,
       socketTimeoutMS: 360000,  // 6 minutes
-      tls: true,
-      tlsMinVersion: 'TLS1.2' // CORRECTED OPTION
-      // tlsAllowInvalidCertificates: false, // Uncomment if needed
+      tls: true
+      // The tlsMinVersion option has been removed to fix the parsing error.
     });
     await client.connect();
     clients.push(client);
