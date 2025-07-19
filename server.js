@@ -24,16 +24,24 @@ app.use(express.static('.'));
 
 // Initialize MongoDB clients and GridFS buckets with keep-alive and TLS options
 (async () => {
-  for (let uri of dbUris) {
-    const client = new MongoClient(uri, {
-      keepAlive: true,
-      socketTimeoutMS: 360000,  // 6 minutes
-      tls: true
-      // The tlsMinVersion option has been removed to fix the parsing error.
-    });
-    await client.connect();
-    clients.push(client);
-    buckets.push(new GridFSBucket(client.db('cloud'), { bucketName: 'files' }));
+  try {
+    for (let uri of dbUris) {
+      const client = new MongoClient(uri, {
+        keepAlive: true,
+        socketTimeoutMS: 360000,  // 6 minutes
+        tls: true,
+        // minVersion: 'TLS1.2' // Temporarily commented out for troubleshooting the SSL_TLSV1_ALERT_INTERNAL_ERROR
+      });
+      await client.connect();
+      clients.push(client);
+      buckets.push(new GridFSBucket(client.db('cloud'), { bucketName: 'files' }));
+      console.log(`Connected to MongoDB: ${uri.substring(0, uri.indexOf('@') + 1)}...`);
+    }
+    console.log("All MongoDB connections established.");
+  } catch (error) {
+    console.error("Failed to connect to one or more MongoDB clusters:", error);
+    // Exit or handle the error gracefully if connections are critical
+    process.exit(1);
   }
 })();
 
@@ -53,9 +61,18 @@ async function findFileAllBuckets(filename) {
 app.get('/files', async (req, res) => {
   const skip = parseInt(req.query.skip) || 0;
   let allFiles = [];
+  // Ensure buckets array is populated before attempting to query
+  if (buckets.length === 0) {
+    return res.status(503).send("Database connections not yet established.");
+  }
   for (let bucket of buckets) {
-    const files = await bucket.find().toArray();
-    allFiles.push(...files);
+    try {
+      const files = await bucket.find().toArray();
+      allFiles.push(...files);
+    } catch (error) {
+      console.error(`Error fetching files from a bucket: ${error.message}`);
+      // Continue to next bucket or decide to send an error response
+    }
   }
   allFiles.sort((a, b) => b.uploadDate - a.uploadDate);
   res.json(allFiles.slice(skip, skip + 10));
@@ -74,22 +91,41 @@ app.post('/upload', upload.single('file'), async (req, res) => {
   if (await findFileAllBuckets(req.file.originalname))
     return res.status(400).send('File already exists');
 
+  // Ensure buckets array is populated before attempting to upload
+  if (buckets.length === 0) {
+    return res.status(503).send("Database connections not yet established. Please try again.");
+  }
+
   for (let i = 0; i < buckets.length; i++) {
-    const used = await getUsedBytes(buckets[i]);
-    if (used + req.file.size < MAX_DB_STORAGE) {
-      const stream = buckets[i].openUploadStream(req.file.originalname);
-      stream.end(req.file.buffer);
-      return res.send('Uploaded');
+    try {
+      const used = await getUsedBytes(buckets[i]);
+      if (used + req.file.size < MAX_DB_STORAGE) {
+        const stream = buckets[i].openUploadStream(req.file.originalname);
+        stream.end(req.file.buffer);
+        return res.send('Uploaded');
+      }
+    } catch (error) {
+      console.error(`Error during upload to bucket ${i}: ${error.message}`);
+      // Log the error but continue trying other buckets if possible
     }
   }
   res.status(507).send('Storage full');
 });
 
 app.delete('/delete/:filename', async (req, res) => {
+  // Ensure buckets array is populated before attempting to delete
+  if (buckets.length === 0) {
+    return res.status(503).send("Database connections not yet established.");
+  }
   for (let bucket of buckets) {
-    const files = await bucket.find({ filename: req.params.filename }).toArray();
-    for (let file of files) {
-      await bucket.delete(file._id);
+    try {
+      const files = await bucket.find({ filename: req.params.filename }).toArray();
+      for (let file of files) {
+        await bucket.delete(file._id);
+      }
+    } catch (error) {
+      console.error(`Error deleting file from a bucket: ${error.message}`);
+      // Continue to next bucket if deletion from one fails
     }
   }
   res.send('Deleted');
@@ -97,7 +133,18 @@ app.delete('/delete/:filename', async (req, res) => {
 
 app.get('/stats', async (req, res) => {
   let used = 0;
-  for (let b of buckets) used += await getUsedBytes(b);
+  // Ensure buckets array is populated before attempting to get stats
+  if (buckets.length === 0) {
+    return res.json({ used: 0, free: TOTAL_LIMIT }); // Or an appropriate error/status
+  }
+  for (let b of buckets) {
+    try {
+      used += await getUsedBytes(b);
+    } catch (error) {
+      console.error(`Error getting stats from a bucket: ${error.message}`);
+      // Decide how to handle partial stats calculation if a bucket fails
+    }
+  }
   res.json({ used, free: TOTAL_LIMIT - used });
 });
 
