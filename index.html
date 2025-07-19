@@ -84,7 +84,7 @@
             skip += files.length;
         } 
         // Note: If files.length is 0, skip remains the same, implying no more files to load.
-        // You might want to disable the "Load More" button if files.length is 0 and skip > 0.
+        // You might want to disable the "Load More" button here.
 
         files.forEach(file => {
           const item = document.createElement('div');
@@ -166,14 +166,12 @@
       };
 
       xhr.onload = async function () {
-        // Crucial change: Display the actual response from the server for debugging
         const serverResponse = xhr.responseText;
         if (xhr.status === 200) {
           alert('Upload successful: ' + serverResponse);
           skip = 0; // Reset skip to load from beginning after upload
           loadMore(); // Reload files
         } else {
-          // Log the full server response to the console for detailed debugging
           console.error("Upload failed. Server response:", serverResponse);
           alert('Upload failed: ' + serverResponse);
         }
@@ -230,7 +228,7 @@
         document.getElementById('stats').innerText =
           `Used: ${(data.used / 1024 / 1024).toFixed(2)} MB / 2048 MB — Free: ${(data.free / 1024 / 1024).toFixed(2)} MB`;
           
-        if (data.message) { // Display message if provided by server (e.g., DB not ready)
+        if (data.message) { 
             document.getElementById('stats').innerText += ` (${data.message})`;
         }
       } catch (error) {
