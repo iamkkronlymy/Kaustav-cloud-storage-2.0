@@ -22,10 +22,13 @@ let clients = [], buckets = [];
 
 app.use(express.static('.'));
 
-// Initialize MongoDB clients and GridFS buckets
+// Initialize MongoDB clients and GridFS buckets with keep-alive options
 (async () => {
   for (let uri of dbUris) {
-    const client = new MongoClient(uri);
+    const client = new MongoClient(uri, {
+      keepAlive: true,
+      socketTimeoutMS: 360000,  // 6 minutes
+    });
     await client.connect();
     clients.push(client);
     buckets.push(new GridFSBucket(client.db('cloud'), { bucketName: 'files' }));
