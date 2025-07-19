@@ -7,25 +7,35 @@
   <style>
     body { font-family: sans-serif; max-width: 700px; margin: auto; padding: 1em; }
     h2 { text-align: center; }
-    /* Updated file-item to use flexbox for better alignment of image + text */
     .file-item { 
         display: flex; 
-        align-items: center; /* Vertically align items */
+        align-items: center; 
         justify-content: space-between; 
         padding: 10px 0; 
         border-bottom: 1px solid #ccc; 
     }
     .file-info {
-        display: flex; /* Flex container for filename and image */
-        align-items: center; /* Align image and text vertically */
-        gap: 10px; /* Space between image and text */
+        display: flex; 
+        align-items: center; 
+        gap: 10px; 
+        /* Added for text wrapping */
+        flex-grow: 1; /* Allows it to take available space */
+        min-width: 0; /* Important for flex items to shrink */
+        overflow-wrap: break-word; /* Breaks long words */
+        word-wrap: break-word; /* Legacy for older browsers */
+        word-break: break-word; /* Ensures breaking within words */
+    }
+    .filename-container { /* New class for the div holding filename and metadata */
+        flex-grow: 1; /* Allows this container to take available space */
+        min-width: 0; /* Allows content to shrink and wrap */
     }
     .file-preview {
-        width: 50px; /* Small preview size */
+        width: 50px; 
         height: 50px;
-        object-fit: contain; /* Ensure image fits within bounds without cropping */
+        object-fit: contain; 
         border-radius: 4px;
         border: 1px solid #eee;
+        flex-shrink: 0; /* Prevent image from shrinking if space is tight */
     }
     .dropdown { display: none; position: absolute; right: 10px; background: #fff; border: 1px solid #ccc; z-index: 100; box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2); }
     .dropdown button { display: block; width: 100%; padding: 8px 15px; border: none; background: #fff; cursor: pointer; text-align: left; }
@@ -85,7 +95,6 @@
   <script>
     let skip = 0;
 
-    // Helper function to check if a filename corresponds to an image
     function isImageFile(filename) {
         const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'];
         const ext = filename.split('.').pop().toLowerCase();
@@ -115,15 +124,13 @@
 
           let previewHtml = '';
           if (isImageFile(file.filename)) {
-              // Note: The /download endpoint works for display because browsers interpret
-              // Content-Type correctly for images.
               previewHtml = `<img src="/download/${encodeURIComponent(file.filename)}" alt="Preview" class="file-preview">`;
           }
 
           item.innerHTML = `
             <div class="file-info">
               ${previewHtml}
-              <div>
+              <div class="filename-container">
                 <strong>${file.filename}</strong><br/>
                 <span class="file-meta">${new Date(file.uploadDate).toLocaleString()}</span>
               </div>
