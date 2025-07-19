@@ -98,6 +98,7 @@
               <span class="three-dot" onclick="toggleMenu(this)">⋮</span>
               <div class="dropdown">
                 <button onclick="download('${file.filename}')">Download</button>
+                <button onclick="renameFile('${file.filename}')">Rename</button>
                 <button onclick="deleteFile('${file.filename}')">Delete</button>
               </div>
             </div>`;
@@ -208,6 +209,43 @@
         alert("An error occurred during deletion. Check browser console for details.");
       }
     }
+
+    // New function for renaming files
+    async function renameFile(oldName) {
+        const newName = prompt(`Enter new name for "${oldName}":`);
+        if (!newName || newName.trim() === '') {
+            alert('New filename cannot be empty.');
+            return;
+        }
+        if (newName === oldName) {
+            alert('New filename is the same as the old filename.');
+            return;
+        }
+
+        try {
+            const res = await fetch('/rename', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ oldName, newName })
+            });
+
+            const serverResponse = await res.text();
+            if (res.ok) {
+                alert('File renamed successfully: ' + serverResponse);
+                skip = 0; // Reset skip to load from beginning after rename
+                loadMore(); // Reload files
+            } else {
+                console.error("Rename failed. Server response:", serverResponse);
+                alert('Failed to rename file: ' + serverResponse);
+            }
+        } catch (error) {
+            console.error("Error during rename operation:", error);
+            alert("An error occurred during rename. Check browser console for details.");
+        }
+    }
+
 
     function download(name) {
       const link = document.createElement('a');
