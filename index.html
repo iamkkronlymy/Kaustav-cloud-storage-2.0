@@ -18,16 +18,15 @@
         display: flex; 
         align-items: center; 
         gap: 10px; 
-        /* Added for text wrapping */
-        flex-grow: 1; /* Allows it to take available space */
-        min-width: 0; /* Important for flex items to shrink */
-        overflow-wrap: break-word; /* Breaks long words */
-        word-wrap: break-word; /* Legacy for older browsers */
-        word-break: break-word; /* Ensures breaking within words */
+        flex-grow: 1; 
+        min-width: 0; 
+        overflow-wrap: break-word; 
+        word-wrap: break-word; 
+        word-break: break-word; 
     }
-    .filename-container { /* New class for the div holding filename and metadata */
-        flex-grow: 1; /* Allows this container to take available space */
-        min-width: 0; /* Allows content to shrink and wrap */
+    .filename-container { 
+        flex-grow: 1; 
+        min-width: 0; 
     }
     .file-preview {
         width: 50px; 
@@ -35,7 +34,7 @@
         object-fit: contain; 
         border-radius: 4px;
         border: 1px solid #eee;
-        flex-shrink: 0; /* Prevent image from shrinking if space is tight */
+        flex-shrink: 0; 
     }
     .dropdown { display: none; position: absolute; right: 10px; background: #fff; border: 1px solid #ccc; z-index: 100; box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2); }
     .dropdown button { display: block; width: 100%; padding: 8px 15px; border: none; background: #fff; cursor: pointer; text-align: left; }
@@ -303,8 +302,9 @@
           throw new Error(`HTTP error! status: ${res.status} - ${await res.text()}`);
         }
         const data = await res.json();
+        const totalCapacity = data.totalCapacity || (data.used + data.free); 
         document.getElementById('stats').innerText =
-          `Used: ${(data.used / 1024 / 1024).toFixed(2)} MB / 2048 MB — Free: ${(data.free / 1024 / 1024).toFixed(2)} MB`;
+          `Used: ${(data.used / 1024 / 1024).toFixed(2)} MB / ${(totalCapacity / 1024 / 1024).toFixed(2)} MB — Free: ${(data.free / 1024 / 1024).toFixed(2)} MB`;
           
         if (data.message) { 
             document.getElementById('stats').innerText += ` (${data.message})`;
