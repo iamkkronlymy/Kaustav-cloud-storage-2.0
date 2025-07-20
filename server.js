@@ -1,19 +1,18 @@
 const express = require('express');
 const multer = require('multer');
 const fs = require('fs');
-const { MongoClient, GridFSBucket, ObjectId } = require('mongodb'); // Import ObjectId
+const { MongoClient, GridFSBucket, ObjectId } = require('mongodb');
 const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Add express.json() middleware to parse JSON request bodies
 app.use(express.json());
 
 const upload = multer({ limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB per file
 const MAX_DB_STORAGE = 512 * 1024 * 1024; // 512MB per DB
-const TOTAL_LIMIT = 2 * 1024 * 1024 * 1024; // 2GB total
 
+// UPDATED dbUris array
 const dbUris = [
   'mongodb+srv://csq5tft8:gEdmhQ94kIgcGi28@cluster0.52zk8gi.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
   'mongodb+srv://hb6g6vff6gf:Gyjp3wBB8FGyqpXz@cluster0.jkbqe5x.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
@@ -23,26 +22,23 @@ const dbUris = [
 ];
 
 let clients = [], buckets = [];
+let TOTAL_LIMIT = 0; // Initialize TOTAL_LIMIT dynamically
 
 app.use(express.static('.'));
 
-// Initialize MongoDB clients and GridFS buckets with TLS options
 (async () => {
   let successfulConnections = 0;
   for (let uri of dbUris) {
     try {
       console.log(`Attempting to connect to MongoDB: ${uri.substring(0, uri.indexOf('@') + 1)}...`);
       const client = new MongoClient(uri, {
-        socketTimeoutMS: 360000,  // 6 minutes
+        socketTimeoutMS: 360000,
         tls: true,
-        // minVersion: 'TLS1.2' // Keeping this commented out. This allows the driver to negotiate
-                               // the best available TLS version, which might help bypass
-                               // the ERR_SSL_TLSV1_ALERT_INTERNAL_ERROR if it's a specific
-                               // client-side TLS version negotiation issue.
       });
       await client.connect();
       clients.push(client);
       buckets.push(new GridFSBucket(client.db('cloud'), { bucketName: 'files' }));
+      TOTAL_LIMIT += MAX_DB_STORAGE; // Add MAX_DB_STORAGE for each successful connection
       console.log(`Successfully connected to MongoDB: ${uri.substring(0, uri.indexOf('@') + 1)}...`);
       successfulConnections++;
     } catch (error) {
@@ -50,15 +46,15 @@ app.use(express.static('.'));
       console.error("Please check your MongoDB URI, network access (IP whitelist on Atlas), and Node.js environment (especially TLS/OpenSSL compatibility).");
       console.error("Error details:", error.message);
     }
-    // 3ms delay between connection attempts
     await new Promise(resolve => setTimeout(resolve, 3));
   }
 
   if (successfulConnections === 0) {
     console.error("CRITICAL ERROR: Failed to connect to ANY MongoDB clusters. Application will not start.");
-    process.exit(1); // Exit if no connections could be established
+    process.exit(1);
   } else {
     console.log(`Successfully established connections to ${successfulConnections} out of ${dbUris.length} MongoDB clusters.`);
+    console.log(`Calculated TOTAL_LIMIT based on successful connections: ${(TOTAL_LIMIT / (1024 * 1024 * 1024)).toFixed(2)} GB`);
     console.log("Application will proceed with available connections.");
   }
 })();
@@ -71,9 +67,8 @@ async function getUsedBytes(bucket) {
 async function findFileAllBuckets(filename) {
   for (let i = 0; i < buckets.length; i++) {
     try {
-      // Find the file by filename
       const files = await buckets[i].find({ filename }).toArray();
-      if (files.length) return { file: files[0], bucket: buckets[i], bucketIndex: i }; // Return bucketIndex
+      if (files.length) return { file: files[0], bucket: buckets[i], bucketIndex: i };
     } catch (error) {
       console.error(`Error searching for file '${filename}' in bucket ${i}: ${error.message}`);
     }
@@ -103,7 +98,14 @@ app.get('/download/:filename', async (req, res) => {
   const match = await findFileAllBuckets(req.params.filename);
   if (!match) return res.status(404).send('Not found');
   try {
-    res.set('Content-Disposition', `attachment; filename="${match.file.filename}"`);
+    const ext = path.extname(req.params.filename).toLowerCase();
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'];
+
+    if (imageExtensions.includes(ext)) {
+        res.set('Content-Disposition', `inline; filename="${match.file.filename}"`);
+    } else {
+        res.set('Content-Disposition', `attachment; filename="${match.file.filename}"`);
+    }
     match.bucket.openDownloadStreamByName(req.params.filename).pipe(res);
   } catch (error) {
     console.error(`Error during download of '${req.params.filename}': ${error.message}`);
@@ -138,7 +140,6 @@ app.post('/upload', upload.single('file'), async (req, res) => {
   res.status(507).send('Storage full or an error occurred during upload to all available buckets.');
 });
 
-// New endpoint for renaming files
 app.post('/rename', async (req, res) => {
   const { oldName, newName } = req.body;
 
@@ -154,7 +155,6 @@ app.post('/rename', async (req, res) => {
     return res.status(503).send("Server is not ready: Database connections not established.");
   }
 
-  // Check if a file with the new name already exists
   if (await findFileAllBuckets(newName)) {
     return res.status(409).send(`A file named '${newName}' already exists.`);
   }
@@ -165,8 +165,6 @@ app.post('/rename', async (req, res) => {
   }
 
   try {
-    // GridFS does not have a direct rename operation on the file document.
-    // Instead, you update the filename field in the files collection directly.
     await match.bucket.s.db.collection('files.files').updateOne(
       { _id: match.file._id },
       { $set: { filename: newName } }
@@ -216,7 +214,7 @@ app.get('/stats', async (req, res) => {
       console.error(`Error getting stats from a bucket: ${error.message}`);
     }
   }
-  res.json({ used, free: TOTAL_LIMIT - used });
+  res.json({ used, free: TOTAL_LIMIT - used, totalCapacity: TOTAL_LIMIT });
 });
 
 app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
