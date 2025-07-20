@@ -18,7 +18,11 @@ const dbUris = [
   'mongodb+srv://hb6g6vff6gf:Gyjp3wBB8FGyqpXz@cluster0.jkbqe5x.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
   'mongodb+srv://aq9d7qh:fKjI8toWE6kVixkL@cluster0.umimpv3.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
   'mongodb+srv://tf4hz7z:TXAJQlbquHbNUK2N@cluster0.0qfgeqz.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
-  'mongodb+srv://n39tjp5:HxZCeJQJe8XmzDUD@cluster0.16wjf7g.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0'
+  'mongodb+srv://n39tjp5:HxZCeJQJe8XmzDUD@cluster0.16wjf7g.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
+  'mongodb+srv://felor64093:wlUvMZV66E4QIfYj@cluster0.wjkmljd.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
+  'mongodb+srv://jinalo6786:QrKblUBWgC17BUdX@cluster0.jzsr84m.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
+  'mongodb+srv://xarejat696:sELDZm2bRanWsjZL@cluster0.n7wjcqy.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
+  'mongodb+srv://siwikag301:Yi8mjueZvMVrRYAt@cluster0.twpfoay.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0'
 ];
 
 let clients = [], buckets = [];
